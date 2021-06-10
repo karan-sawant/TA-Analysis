@@ -53,14 +53,14 @@ loadData("WRX-INR");
 loadData("ETH-INR");
 loadData("BTC-INR");
 loadData("XRP-INR");
-setTimeout(setInterval(function(){ loadData("DOGE-INR"); }, 10000), 250);
-setTimeout(setInterval(function(){ loadData("SHIB-INR"); }, 10000), 500);
-setTimeout(setInterval(function(){ loadData("XVG-INR"); }, 10000), 750);
-setTimeout(setInterval(function(){ loadData("MATIC-INR"); }, 10000), 1000);
-setTimeout(setInterval(function(){ loadData("WRX-INR"); }, 10000), 1250);
-setTimeout(setInterval(function(){ loadData("ETH-INR"); }, 10000), 1500);
-setTimeout(setInterval(function(){ loadData("BTC-INR"); }, 10000), 1750);
-setTimeout(setInterval(function(){ loadData("XRP-INR"); }, 10000), 2000);
+setTimeout(function(){setInterval(function(){ loadData("DOGE-INR"); }, 10000)}, 250);
+setTimeout(function(){setInterval(function(){ loadData("SHIB-INR"); }, 10000)}, 500);
+setTimeout(function(){setInterval(function(){ loadData("XVG-INR"); }, 10000)}, 750);
+setTimeout(function(){setInterval(function(){ loadData("MATIC-INR"); }, 10000)}, 1000);
+setTimeout(function(){setInterval(function(){ loadData("WRX-INR"); }, 10000)}, 1250);
+setTimeout(function(){setInterval(function(){ loadData("ETH-INR"); }, 10000)}, 1500);
+setTimeout(function(){setInterval(function(){ loadData("BTC-INR"); }, 10000)}, 1750);
+setTimeout(function(){setInterval(function(){ loadData("XRP-INR"); }, 10000)}, 2000);
 
 // CROS
 var corsOptionsDelegate = (req, callback) => {
@@ -116,11 +116,17 @@ wss.on('open', () => {
                 if(coinsHist[coinName]>0 && myHistOne<0){
                     // Sell
                     console.log(coinName, "sell", myHist);
-                    io.emit('signal', {"coin": _coinName, "type": "sell"});
-                    db_signal.updateOne({id: coinName, ts: ts}, {$set: {id: coinName, ts: ts, signal: "sell", price: data.trades[0].price, "value": myHist}}, {upsert: true}).exec();
+                    io.emit('signal', {"coin": _coinName, "type": "sell-one"});
+                    db_signal.updateOne({id: coinName, ts: ts}, {$set: {id: coinName, ts: ts, signal: "sell-one", price: data.trades[0].price, "value": myHist}}, {upsert: true}).exec();
+                }
+                if(coinsHist[coinName]>0 && myHist<0){
+                    // Sell
+                    console.log(coinName, "sell", myHist);
+                    io.emit('signal', {"coin": _coinName, "type": "sell-five"});
+                    db_signal.updateOne({id: coinName, ts: ts}, {$set: {id: coinName, ts: ts, signal: "sell-five", price: data.trades[0].price, "value": myHist}}, {upsert: true}).exec();
                     coinsHist[coinName] = -1;
                 }
-                if(coinsHist[coinName]<0 && myHist>0){
+                if(coinsHist[coinName]<0 && myHist>0.04){
                     // Buy
                     let slope = (macd.MACD[macd.MACD.length-1]-macd.MACD[macd.MACD.length-3])
                     console.log(slope, macd.MACD[macd.MACD.length-1], macd.MACD[macd.MACD.length-3])
