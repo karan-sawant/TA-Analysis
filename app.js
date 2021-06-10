@@ -18,9 +18,7 @@ var db_signal = dataManager.model("signal", new mongoose.Schema({},{ strict: fal
 var coinsData={};
 var coinsDataOne={};
 var coinsHist={};
-
-// WSS Connections
-var wss = new WebSocket('wss://ws-ap2.pusher.com/app/47bd0a9591a05c2a66db?protocol=7&client=js&version=4.4.0&flash=falseh');
+var coinsHistOne={};
 
 // Load Data
 let loadData = async coin =>{
@@ -31,7 +29,7 @@ let loadData = async coin =>{
         'api-key':'WRXPRODWn5Kc36$#%WYjguL;1oUYnD9ijiIHE7bk3r78%3#mFHJdik3n1Uafgib98*GI'
     }
     try {
-        const resp = await axios.get(`https://x.wazirx.com/api/v2/k?market=${_coin}&period=5&limit=2000`, headers);
+        var resp = await axios.get(`https://x.wazirx.com/api/v2/k?market=${_coin}&period=5&limit=2000`, headers);
         coinsData[_coin] = resp.data.map(d=>{
             return d[4];
         });
@@ -40,7 +38,7 @@ let loadData = async coin =>{
             return d[4];
         });
     } catch (error) {
-        
+        console.log(error)
     }
 };
 
@@ -88,60 +86,74 @@ io.on("connection", socket=>{
     console.log(socket.client.conn.server.clientsCount);
 });
 
-wss.on('open', () => {
-    wss.send(JSON.stringify({"event":"pusher:subscribe","data":{"channel":"market-dogeinr-global"}}));
-    wss.send(JSON.stringify({"event":"pusher:subscribe","data":{"channel":"market-shibinr-global"}}));
-    wss.send(JSON.stringify({"event":"pusher:subscribe","data":{"channel":"market-xvginr-global"}}));
-    wss.send(JSON.stringify({"event":"pusher:subscribe","data":{"channel":"market-maticinr-global"}}));
-    wss.send(JSON.stringify({"event":"pusher:subscribe","data":{"channel":"market-wrxinr-global"}}));
-    wss.send(JSON.stringify({"event":"pusher:subscribe","data":{"channel":"market-ethinr-global"}}));
-    wss.send(JSON.stringify({"event":"pusher:subscribe","data":{"channel":"market-btcinr-global"}}));
-    wss.send(JSON.stringify({"event":"pusher:subscribe","data":{"channel":"market-xrpinr-global"}}));
-    wss.onmessage = e => {
-        let data = JSON.parse(e.data);
-        if(data.event == "trades"){
-            let coinName = data.channel.split("-")[1];
-            let _coinName = coinName.toUpperCase().replace("INR", "-INR");
-            data = JSON.parse(data.data);
-            let new_data = [...coinsData[coinName]];
-            new_data.push(data.trades[0].price);
-            let macd = MACD(new_data);
-            let myHist = macd.histogram[macd.histogram.length -1];
-            let new_dataOne = [...coinsDataOne[coinName]];
-            new_dataOne.push(data.trades[0].price);
-            let macdOne = MACD(new_dataOne);
-            let myHistOne = macdOne.histogram[macdOne.histogram.length -1];
-            let ts = new Date().getTime();
-            if(coinName in coinsHist){
-                if(coinsHist[coinName]>0 && myHistOne<0){
-                    // Sell
-                    console.log(coinName, "sell", myHist);
-                    io.emit('signal', {"coin": _coinName, "type": "sell-one"});
-                    db_signal.updateOne({id: coinName, ts: ts}, {$set: {id: coinName, ts: ts, signal: "sell-one", price: data.trades[0].price, "value": myHist}}, {upsert: true}).exec();
-                }
-                if(coinsHist[coinName]>0 && myHist<0){
-                    // Sell
-                    console.log(coinName, "sell", myHist);
-                    io.emit('signal', {"coin": _coinName, "type": "sell-five"});
-                    db_signal.updateOne({id: coinName, ts: ts}, {$set: {id: coinName, ts: ts, signal: "sell-five", price: data.trades[0].price, "value": myHist}}, {upsert: true}).exec();
-                    coinsHist[coinName] = -1;
-                }
-                if(coinsHist[coinName]<0 && myHist>0.04){
-                    // Buy
-                    let slope = (macd.MACD[macd.MACD.length-1]-macd.MACD[macd.MACD.length-3])
-                    console.log(slope, macd.MACD[macd.MACD.length-1], macd.MACD[macd.MACD.length-3])
-                    console.log(coinName, "buy", myHist);
-                    io.emit('signal', {"coin": _coinName, "type": "buy"});
-                    db_signal.updateOne({id: coinName, ts: ts}, {$set: {id: coinName, ts: ts, signal: "buy", price: data.trades[0].price, "value": myHist}}, {upsert: true}).exec();
-                    coinsHist[coinName] = 1;
-                }
-            }else{
-                if(macd.histogram[macd.MACD.length -1] >0){
-                    coinsHist[coinName] = 1
+var loadWss = () =>{
+    // WSS Connections
+    var wss = new WebSocket('wss://ws-ap2.pusher.com/app/47bd0a9591a05c2a66db?protocol=7&client=js&version=4.4.0&flash=falseh');
+
+    wss.on('open', () => {
+        wss.send(JSON.stringify({"event":"pusher:subscribe","data":{"channel":"market-dogeinr-global"}}));
+        wss.send(JSON.stringify({"event":"pusher:subscribe","data":{"channel":"market-shibinr-global"}}));
+        wss.send(JSON.stringify({"event":"pusher:subscribe","data":{"channel":"market-xvginr-global"}}));
+        wss.send(JSON.stringify({"event":"pusher:subscribe","data":{"channel":"market-maticinr-global"}}));
+        wss.send(JSON.stringify({"event":"pusher:subscribe","data":{"channel":"market-wrxinr-global"}}));
+        wss.send(JSON.stringify({"event":"pusher:subscribe","data":{"channel":"market-ethinr-global"}}));
+        wss.send(JSON.stringify({"event":"pusher:subscribe","data":{"channel":"market-btcinr-global"}}));
+        wss.send(JSON.stringify({"event":"pusher:subscribe","data":{"channel":"market-xrpinr-global"}}));
+        wss.onmessage = e => {
+            let data = JSON.parse(e.data);
+            if(data.event == "trades"){
+                let coinName = data.channel.split("-")[1];
+                let _coinName = coinName.toUpperCase().replace("INR", "-INR");
+                data = JSON.parse(data.data);
+                let new_data = [...coinsData[coinName]];
+                new_data.push(data.trades[0].price);
+                let macd = MACD(new_data);
+                let myHist = macd.histogram[macd.histogram.length -1];
+                let new_dataOne = [...coinsDataOne[coinName]];
+                new_dataOne.push(data.trades[0].price);
+                let macdOne = MACD(new_dataOne);
+                let myHistOne = macdOne.histogram[macdOne.histogram.length -1];
+                let ts = new Date().getTime();
+                if(coinName in coinsHist){
+                    if(coinsHist[coinName]>0 && coinsHistOne[coinName]>0 && myHistOne<0){
+                        // Sell
+                        console.log(coinName, "sell", myHist);
+                        io.emit('signal', {"coin": _coinName, "type": "sell-one"});
+                        db_signal.updateOne({id: coinName, ts: ts}, {$set: {id: coinName, ts: ts, signal: "sell-one", price: data.trades[0].price, "value": myHist}}, {upsert: true}).exec();
+                    }
+                    if(coinsHist[coinName]>0 && myHist<0){
+                        // Sell
+                        console.log(coinName, "sell", myHist);
+                        io.emit('signal', {"coin": _coinName, "type": "sell-five"});
+                        db_signal.updateOne({id: coinName, ts: ts}, {$set: {id: coinName, ts: ts, signal: "sell-five", price: data.trades[0].price, "value": myHist}}, {upsert: true}).exec();
+                        coinsHist[coinName] = -1;
+                        coinsHistOne[coinName] = -1;
+                    }
+                    if(coinsHist[coinName]<0 && myHist>0.04){
+                        // Buy
+                        let slope = (macd.MACD[macd.MACD.length-1]-macd.MACD[macd.MACD.length-3])
+                        console.log(slope, macd.MACD[macd.MACD.length-1], macd.MACD[macd.MACD.length-3])
+                        console.log(coinName, "buy", myHist);
+                        io.emit('signal', {"coin": _coinName, "type": "buy"});
+                        db_signal.updateOne({id: coinName, ts: ts}, {$set: {id: coinName, ts: ts, signal: "buy", price: data.trades[0].price, "value": myHist}}, {upsert: true}).exec();
+                        coinsHist[coinName] = 1;
+                        coinsHistOne[coinName] = 1;
+                    }
                 }else{
-                    coinsHist[coinName] = -1
+                    if(macd.histogram[macd.MACD.length -1] >0){
+                        coinsHist[coinName] = 1
+                    }else{
+                        coinsHist[coinName] = -1
+                    }
+                    if(macdOne.histogram[macdOne.MACD.length -1] >0){
+                        coinsHistOne[coinName] = 1
+                    }else{
+                        coinsHistOne[coinName] = -1
+                    }
                 }
             }
-        }
-    };
-});
+        };
+    });
+}
+
+setTimeout(()=>{loadWss();}, 10000);
