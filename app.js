@@ -80,7 +80,7 @@ app.use(express.urlencoded({
     extended: true
 }));
 
-const server = app.listen(3000, "0.0.0.0");
+const server = app.listen(3010, "0.0.0.0");
 const io = require("./socket").init(server);
 
 // Socket Init
