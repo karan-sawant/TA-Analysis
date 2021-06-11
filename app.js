@@ -142,6 +142,7 @@ var loadWss = () =>{
                         SimpleMASignal: false});
                     let myHist = macd[macd.length-1].histogram;
                     let roc = ROC.calculate({values: new_data, period: 9});
+                    roc = roc[roc.length - 1];
                     let bullish = BULLISH(coinsData[coinName]);
                     let bearish = BEARISH(coinsData[coinName]);
                     let new_dataOne = [...coinsDataOne[coinName].close];
@@ -172,7 +173,7 @@ var loadWss = () =>{
                             db_signal.updateOne({id: coinName, ts: ts}, {$set: {id: coinName, ts: ts, signal: "sell", precentage: "100", price: price, "value": myHist, "bullish": bullish, "bearish": bearish, "roc": roc}}, {upsert: true}).exec();
                             coinsHist[coinName] = -1;
                         }
-                        if(coinsHist[coinName]<0 && myHist>0 && bullish){
+                        if(coinsHist[coinName]<0 && myHist>0.04 && bullish){
                             // Buy
                             console.log(coinName, "buy", myHist, price);
                             io.emit('signal', {"coin": _coinName, "type": "buy"});
