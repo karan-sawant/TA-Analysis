@@ -51,14 +51,14 @@ loadData("WRX-INR");
 loadData("ETH-INR");
 loadData("BTC-INR");
 loadData("XRP-INR");
-setTimeout(function(){setInterval(function(){ loadData("DOGE-INR"); }, 10000)}, 250);
-setTimeout(function(){setInterval(function(){ loadData("SHIB-INR"); }, 10000)}, 500);
-setTimeout(function(){setInterval(function(){ loadData("XVG-INR"); }, 10000)}, 750);
-setTimeout(function(){setInterval(function(){ loadData("MATIC-INR"); }, 10000)}, 1000);
-setTimeout(function(){setInterval(function(){ loadData("WRX-INR"); }, 10000)}, 1250);
-setTimeout(function(){setInterval(function(){ loadData("ETH-INR"); }, 10000)}, 1500);
-setTimeout(function(){setInterval(function(){ loadData("BTC-INR"); }, 10000)}, 1750);
-setTimeout(function(){setInterval(function(){ loadData("XRP-INR"); }, 10000)}, 2000);
+setTimeout(function(){setInterval(function(){ loadData("DOGE-INR");}, 10000)}, 250);
+setTimeout(function(){setInterval(function(){ loadData("SHIB-INR");}, 10000)}, 500);
+setTimeout(function(){setInterval(function(){ loadData("XVG-INR");}, 10000)}, 750);
+setTimeout(function(){setInterval(function(){ loadData("MATIC-INR");}, 10000)}, 1000);
+setTimeout(function(){setInterval(function(){ loadData("WRX-INR");}, 10000)}, 1250);
+setTimeout(function(){setInterval(function(){ loadData("ETH-INR");}, 10000)}, 1500);
+setTimeout(function(){setInterval(function(){ loadData("BTC-INR");}, 10000)}, 1750);
+setTimeout(function(){setInterval(function(){ loadData("XRP-INR");}, 10000)}, 2000);
 
 // CROS
 var corsOptionsDelegate = (req, callback) => {
@@ -115,11 +115,16 @@ var loadWss = () =>{
                 let myHistOne = macdOne.histogram[macdOne.histogram.length -1];
                 let ts = new Date().getTime();
                 if(coinName in coinsHist){
+                    if(coinsHist[coinName]>0 && myHistOne>0 && coinsHistOne[coinName]<0){
+                        // Buy one only after Buy Five #notrade
+                        coinsHistOne[coinName] = 1;
+                    }
                     if(coinsHist[coinName]>0 && coinsHistOne[coinName]>0 && myHistOne<0){
-                        // Sell
-                        console.log(coinName, "sell", myHist);
+                        // Sell One only after Buy Five
+                        console.log(coinName, "sell", myHistOne);
                         io.emit('signal', {"coin": _coinName, "type": "sell-one"});
-                        db_signal.updateOne({id: coinName, ts: ts}, {$set: {id: coinName, ts: ts, signal: "sell-one", price: data.trades[0].price, "value": myHist}}, {upsert: true}).exec();
+                        db_signal.updateOne({id: coinName, ts: ts}, {$set: {id: coinName, ts: ts, signal: "sell-one", price: data.trades[0].price, "value": myHistOne}}, {upsert: true}).exec();
+                        coinsHistOne[coinName] = -1;
                     }
                     if(coinsHist[coinName]>0 && myHist<0){
                         // Sell
@@ -127,9 +132,8 @@ var loadWss = () =>{
                         io.emit('signal', {"coin": _coinName, "type": "sell-five"});
                         db_signal.updateOne({id: coinName, ts: ts}, {$set: {id: coinName, ts: ts, signal: "sell-five", price: data.trades[0].price, "value": myHist}}, {upsert: true}).exec();
                         coinsHist[coinName] = -1;
-                        coinsHistOne[coinName] = -1;
                     }
-                    if(coinsHist[coinName]<0 && myHist>0.04){
+                    if(coinsHist[coinName]<0 && myHist>0){
                         // Buy
                         let slope = (macd.MACD[macd.MACD.length-1]-macd.MACD[macd.MACD.length-3])
                         console.log(slope, macd.MACD[macd.MACD.length-1], macd.MACD[macd.MACD.length-3])
