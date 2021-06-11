@@ -153,6 +153,7 @@ var loadWss = () =>{
                         SimpleMAOscillator: false,
                         SimpleMASignal: false});
                     let myHistOne = macdOne[macdOne.length-1].histogram;
+                    let limit = Math.abs(macd[macd.length -1].MACD*0.1)
                     let ts = new Date().getTime();
                     if(coinName in coinsHist){
                         if(coinsHist[coinName]>0 && myHistOne>0 && coinsHistOne[coinName]<0){
@@ -173,7 +174,7 @@ var loadWss = () =>{
                             db_signal.updateOne({id: coinName, ts: ts}, {$set: {id: coinName, ts: ts, signal: "sell", precentage: "100", price: price, "value": myHist, "bullish": bullish, "bearish": bearish, "roc": roc}}, {upsert: true}).exec();
                             coinsHist[coinName] = -1;
                         }
-                        if(coinsHist[coinName]<0 && myHist>0.04 && bullish){
+                        if(coinsHist[coinName]<0 && myHist>limit && bullish){
                             // Buy
                             console.log(coinName, "buy", myHist, price);
                             io.emit('signal', {"coin": _coinName, "type": "buy"});
