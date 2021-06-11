@@ -1,10 +1,15 @@
 const express = require("express"),
 axios = require("axios"), 
 WebSocket = require('ws'), 
-MACD = require("macd"),
 mongoose = require("mongoose"),
-Mongoose = require('mongoose').Mongoose;;
+Mongoose = require('mongoose').Mongoose,
+MACD = require('technicalindicators').MACD,
+BULLISH = require('technicalindicators').bullish,
+BEARISH = require('technicalindicators').bearish,
+ROC = require('technicalindicators').ROC;
+
 var cors = require('cors');
+
 const app = express();
 
 // DataBase Connection
@@ -19,6 +24,7 @@ var coinsData={};
 var coinsDataOne={};
 var coinsHist={};
 var coinsHistOne={};
+var coinPrice={};
 
 // Load Data
 let loadData = async coin =>{
@@ -30,13 +36,33 @@ let loadData = async coin =>{
     }
     try {
         var resp = await axios.get(`https://x.wazirx.com/api/v2/k?market=${_coin}&period=5&limit=2000`, headers);
-        coinsData[_coin] = resp.data.map(d=>{
+        let open = resp.data.map(d=>{
+            return d[1];
+        });
+        let high = resp.data.map(d=>{
+            return d[2];
+        });
+        let low = resp.data.map(d=>{
+            return d[3];
+        });
+        let close = resp.data.map(d=>{
             return d[4];
         });
+        coinsData[_coin] = {open: open, high: high, low: low, close: close};
         resp = await axios.get(`https://x.wazirx.com/api/v2/k?market=${_coin}&period=1&limit=2000`, headers);
-        coinsDataOne[_coin] = resp.data.map(d=>{
+        open = resp.data.map(d=>{
+            return d[1];
+        });
+        high = resp.data.map(d=>{
+            return d[2];
+        });
+        low = resp.data.map(d=>{
+            return d[3];
+        });
+        close = resp.data.map(d=>{
             return d[4];
         });
+        coinsDataOne[_coin] = {open: open, high: high, low: low, close: close};
     } catch (error) {
         console.log(error)
     }
@@ -103,56 +129,69 @@ var loadWss = () =>{
             let data = JSON.parse(e.data);
             if(data.event == "trades"){
                 let coinName = data.channel.split("-")[1];
-                let _coinName = coinName.toUpperCase().replace("INR", "-INR");
                 data = JSON.parse(data.data);
-                let new_data = [...coinsData[coinName]];
-                new_data.push(data.trades[0].price);
-                let macd = MACD(new_data);
-                let myHist = macd.histogram[macd.histogram.length -1];
-                let new_dataOne = [...coinsDataOne[coinName]];
-                new_dataOne.push(data.trades[0].price);
-                let macdOne = MACD(new_dataOne);
-                let myHistOne = macdOne.histogram[macdOne.histogram.length -1];
-                let ts = new Date().getTime();
-                if(coinName in coinsHist){
-                    if(coinsHist[coinName]>0 && myHistOne>0 && coinsHistOne[coinName]<0){
-                        // Buy one only after Buy Five #notrade
-                        coinsHistOne[coinName] = 1;
-                    }
-                    if(coinsHist[coinName]>0 && coinsHistOne[coinName]>0 && myHistOne<0){
-                        // Sell One only after Buy Five
-                        console.log(coinName, "sell", myHistOne);
-                        io.emit('signal', {"coin": _coinName, "type": "sell-one"});
-                        db_signal.updateOne({id: coinName, ts: ts}, {$set: {id: coinName, ts: ts, signal: "sell-one", price: data.trades[0].price, "value": myHistOne}}, {upsert: true}).exec();
-                        coinsHistOne[coinName] = -1;
-                    }
-                    if(coinsHist[coinName]>0 && myHist<0){
-                        // Sell
-                        console.log(coinName, "sell", myHist);
-                        io.emit('signal', {"coin": _coinName, "type": "sell-five"});
-                        db_signal.updateOne({id: coinName, ts: ts}, {$set: {id: coinName, ts: ts, signal: "sell-five", price: data.trades[0].price, "value": myHist}}, {upsert: true}).exec();
-                        coinsHist[coinName] = -1;
-                    }
-                    if(coinsHist[coinName]<0 && myHist>0){
-                        // Buy
-                        let slope = (macd.MACD[macd.MACD.length-1]-macd.MACD[macd.MACD.length-3])
-                        console.log(slope, macd.MACD[macd.MACD.length-1], macd.MACD[macd.MACD.length-3])
-                        console.log(coinName, "buy", myHist);
-                        io.emit('signal', {"coin": _coinName, "type": "buy"});
-                        db_signal.updateOne({id: coinName, ts: ts}, {$set: {id: coinName, ts: ts, signal: "buy", price: data.trades[0].price, "value": myHist}}, {upsert: true}).exec();
-                        coinsHist[coinName] = 1;
-                        coinsHistOne[coinName] = 1;
-                    }
-                }else{
-                    if(macd.histogram[macd.MACD.length -1] >0){
-                        coinsHist[coinName] = 1
+                let price = data.trades[0].price;
+                if(coinPrice[coinName]!=price){
+                    let _coinName = coinName.toUpperCase().replace("INR", "-INR");
+                    let new_data = [...coinsData[coinName].close];
+                    new_data.push(price);
+                    let macd = MACD.calculate({values: new_data, fastPeriod: 12,
+                        slowPeriod: 26,
+                        signalPeriod: 9,
+                        SimpleMAOscillator: false,
+                        SimpleMASignal: false});
+                    let myHist = macd[macd.length-1].histogram;
+                    let roc = ROC.calculate({values: new_data, period: 9});
+                    let bullish = BULLISH(coinsData[coinName]);
+                    let bearish = BEARISH(coinsData[coinName]);
+                    let new_dataOne = [...coinsDataOne[coinName].close];
+                    new_dataOne.push(price);
+                    let macdOne = MACD.calculate({values: new_dataOne, fastPeriod: 12,
+                        slowPeriod: 26,
+                        signalPeriod: 9,
+                        SimpleMAOscillator: false,
+                        SimpleMASignal: false});
+                    let myHistOne = macdOne[macdOne.length-1].histogram;
+                    let ts = new Date().getTime();
+                    if(coinName in coinsHist){
+                        if(coinsHist[coinName]>0 && myHistOne>0 && coinsHistOne[coinName]<0){
+                            // Buy one only after Buy Five #notrade
+                            coinsHistOne[coinName] = 1;
+                        }
+                        if(coinsHist[coinName]>0 && coinsHistOne[coinName]>0 && myHistOne<0){
+                            // Sell One only after Buy Five
+                            console.log(coinName, "sell 1", myHistOne, price);
+                            io.emit('signal', {"coin": _coinName, "type": "sell", "precentage": "25"});
+                            db_signal.updateOne({id: coinName, ts: ts}, {$set: {id: coinName, ts: ts, signal: "sell", precentage: "25", price: price, "value": myHistOne}}, {upsert: true}).exec();
+                            coinsHistOne[coinName] = -1;
+                        }
+                        if(coinsHist[coinName]>0 && myHist<0){
+                            // Sell
+                            console.log(coinName, "sell 5", myHist, price);
+                            io.emit('signal', {"coin": _coinName, "type": "sell", "precentage": "100"});
+                            db_signal.updateOne({id: coinName, ts: ts}, {$set: {id: coinName, ts: ts, signal: "sell", precentage: "100", price: price, "value": myHist, "bullish": bullish, "bearish": bearish, "roc": roc}}, {upsert: true}).exec();
+                            coinsHist[coinName] = -1;
+                        }
+                        if(coinsHist[coinName]<0 && myHist>0.04 && bullish){
+                            // Buy
+                            console.log(coinName, "buy", myHist, price);
+                            io.emit('signal', {"coin": _coinName, "type": "buy"});
+                            db_signal.updateOne({id: coinName, ts: ts}, {$set: {id: coinName, ts: ts, signal: "buy", price: price, "value": myHist, "bullish": bullish, "bearish": bearish, "roc": roc}}, {upsert: true}).exec();
+                            coinsHist[coinName] = 1;
+                            coinsHistOne[coinName] = 1;
+                        }
                     }else{
-                        coinsHist[coinName] = -1
-                    }
-                    if(macdOne.histogram[macdOne.MACD.length -1] >0){
-                        coinsHistOne[coinName] = 0
-                    }else{
-                        coinsHistOne[coinName] = 0
+                        if(myHist >0){
+                            coinsHist[coinName] = 1
+                        }else{
+                            coinsHist[coinName] = -1
+                        }
+                        if(myHistOne >0){
+                            coinsHistOne[coinName] = 0
+                        }else{
+                            coinsHistOne[coinName] = 0
+                        }
+                        coinPrice[coinName] = price;
                     }
                 }
             }
