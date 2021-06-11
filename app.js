@@ -70,7 +70,7 @@ let loadData = async coin =>{
 
 // Data Call 
 loadData("DOGE-INR");
-loadData("SHIB-INR");
+loadData("ADA-INR");
 loadData("XVG-INR");
 loadData("MATIC-INR");
 loadData("WRX-INR");
@@ -78,7 +78,7 @@ loadData("ETH-INR");
 loadData("BTC-INR");
 loadData("XRP-INR");
 setTimeout(function(){setInterval(function(){ loadData("DOGE-INR");}, 10000)}, 250);
-setTimeout(function(){setInterval(function(){ loadData("SHIB-INR");}, 10000)}, 500);
+setTimeout(function(){setInterval(function(){ loadData("ADA-INR");}, 10000)}, 500);
 setTimeout(function(){setInterval(function(){ loadData("XVG-INR");}, 10000)}, 750);
 setTimeout(function(){setInterval(function(){ loadData("MATIC-INR");}, 10000)}, 1000);
 setTimeout(function(){setInterval(function(){ loadData("WRX-INR");}, 10000)}, 1250);
@@ -118,7 +118,7 @@ var loadWss = () =>{
 
     wss.on('open', () => {
         wss.send(JSON.stringify({"event":"pusher:subscribe","data":{"channel":"market-dogeinr-global"}}));
-        wss.send(JSON.stringify({"event":"pusher:subscribe","data":{"channel":"market-shibinr-global"}}));
+        wss.send(JSON.stringify({"event":"pusher:subscribe","data":{"channel":"market-adainr-global"}}));
         wss.send(JSON.stringify({"event":"pusher:subscribe","data":{"channel":"market-xvginr-global"}}));
         wss.send(JSON.stringify({"event":"pusher:subscribe","data":{"channel":"market-maticinr-global"}}));
         wss.send(JSON.stringify({"event":"pusher:subscribe","data":{"channel":"market-wrxinr-global"}}));
