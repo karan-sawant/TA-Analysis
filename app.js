@@ -150,9 +150,9 @@ var loadWss = () =>{
                         coinsHist[coinName] = -1
                     }
                     if(macdOne.histogram[macdOne.MACD.length -1] >0){
-                        coinsHistOne[coinName] = 1
+                        coinsHistOne[coinName] = 0
                     }else{
-                        coinsHistOne[coinName] = -1
+                        coinsHistOne[coinName] = 0
                     }
                 }
             }
