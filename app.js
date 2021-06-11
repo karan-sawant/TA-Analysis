@@ -172,7 +172,7 @@ var loadWss = () =>{
                             db_signal.updateOne({id: coinName, ts: ts}, {$set: {id: coinName, ts: ts, signal: "sell", precentage: "100", price: price, "value": myHist, "bullish": bullish, "bearish": bearish, "roc": roc}}, {upsert: true}).exec();
                             coinsHist[coinName] = -1;
                         }
-                        if(coinsHist[coinName]<0 && myHist>0.04 && bullish){
+                        if(coinsHist[coinName]<0 && myHist>0 && bullish){
                             // Buy
                             console.log(coinName, "buy", myHist, price);
                             io.emit('signal', {"coin": _coinName, "type": "buy"});
