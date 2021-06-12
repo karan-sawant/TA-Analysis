@@ -23,6 +23,7 @@ var live = {},
 signal = {},
 historical = {},
 timestamp = 0,
+tradetime = {},
 live_high={},
 live_low={};
 
@@ -137,23 +138,26 @@ let getSignal = coin =>{
         close.push(live[coin]);
         let macd = MACD.calculate({values: close, fastPeriod: 12, slowPeriod: 26, signalPeriod: 9, SimpleMAOscillator: false, SimpleMASignal: false});
         let histogram = macd[macd.length-1].histogram;
-        if(signal[coin]==-1 && psar_diff>0){
+        if(signal[coin]==-1 && psar_diff>0 && (ts - tradetime[coin])>300000){
             // Buy Signal & Check MACD
             console.log("Buy", coin, live[coin]);
             io.emit('signal', {"coin": coinName, "type": "buy", "price": live[coin]});
             db_test.updateOne({id: coinName, ts: ts}, {$set: {id: coinName, ts: ts, signal: "buy", price: live[coin], "histogram": histogram}}, {upsert: true}).exec();
             signal[coin]=1;
+            tradetime[coin] = ts;
         }
-        if(signal[coin]==1 && psar_diff<0){
+        if(signal[coin]==1 && psar_diff<0 && (ts - tradetime[coin])>300000){
             // Sell
             console.log("Sell", coin, live[coin])
             io.emit('signal', {"coin": coinName, "type": "sell", "price": live[coin]});
             db_test.updateOne({id: coinName, ts: ts}, {$set: {id: coinName, ts: ts, signal: "sell", price: live[coin], "histogram": histogram}}, {upsert: true}).exec();
             signal[coin]=-1;
+            tradetime[coin] = ts;
         }
     }else{
         if(psar_diff>0) signal[coin] = 1;
         else signal[coin] = -1;
+        tradetime[coin] = 0;
     }
 }
 
