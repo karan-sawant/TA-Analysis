@@ -4,9 +4,7 @@ WebSocket = require('ws'),
 mongoose = require("mongoose"),
 Mongoose = require('mongoose').Mongoose,
 MACD = require('technicalindicators').MACD,
-BULLISH = require('technicalindicators').bullish,
-BEARISH = require('technicalindicators').bearish,
-ROC = require('technicalindicators').ROC;
+PSAR = require('technicalindicators').PSAR;
 
 var cors = require('cors');
 
@@ -18,13 +16,18 @@ dataManager.connect("mongodb+srv://admin:VkpZ7b47MI42SHdV@metastorage.x9ydo.mong
 
 // Collection Objects
 var db_signal = dataManager.model("signal", new mongoose.Schema({},{ strict: false }), "signal");
+var db_test = dataManager.model("test", new mongoose.Schema({},{ strict: false }), "test");
 
 // Global Variable
-var coinsData={};
-var coinsDataOne={};
-var coinsHist={};
-var coinsHistOne={};
-var coinPrice={};
+var live = {},
+signal = {},
+historical = {},
+timestamp = 0,
+live_high={},
+live_low={};
+
+const coins = ['USDT-INR', 'MATIC-INR', 'BTC-INR', 'WRX-INR', 'TKO-INR', 'DOGE-INR', 'ETH-INR', 'SHIB-INR', 'ADA-INR', 'XRP-INR', 'XVG-INR', 'WIN-INR', 'BNB-INR', 'TRX-INR', 'UFT-INR', 'VET-INR', 'DOCK-INR', 'ARK-INR', 'COTI-INR', '1INCH-INR', 'ETC-INR', 'BTT-INR', 'ENJ-INR', 'DOT-INR', 'DGB-INR', 'CHR-INR', 'HBAR-INR', 'ZIL-INR', 'LTC-INR', 'DENT-INR', 'CRV-INR', 'XLM-INR', 'EOS-INR', 'REN-INR', 'LINK-INR', 'SC-INR', 'BZRX-INR', 'LUNA-INR', 'SXP-INR', 'FTM-INR', 'BCH-INR', 'HOT-INR', 'HNT-INR', 'CAKE-INR', 'BAT-INR', 'XEM-INR', 'UNI-INR', 'ATOM-INR', 'IOTX-INR', 'YFII-INR', 'YFI-INR', 'OMG-INR', 'FIL-INR', 'IOST-INR', 'MANA-INR', 'EZ-INR', 'KMD-INR', 'BUSD-INR', 'ZRX-INR', 'CTSI-INR', 'AVAX-INR', 'CVC-INR', 'PUSH-INR', 'ZEC-INR', 'DASH-INR', 'UMA-INR', 'PAXG-INR', 'FTT-INR'];
+var trader = ["DOGE-INR", "ADA-INR", "XVG-INR", "MATIC-INR", "WRX-INR", "ETH-INR", "BTC-INR", "XRP-INR"];
 
 // Load Data
 let loadData = async coin =>{
@@ -48,43 +51,21 @@ let loadData = async coin =>{
         let close = resp.data.map(d=>{
             return d[4];
         });
-        coinsData[_coin] = {open: open, high: high, low: low, close: close};
-        resp = await axios.get(`https://x.wazirx.com/api/v2/k?market=${_coin}&period=1&limit=2000`, headers);
-        open = resp.data.map(d=>{
-            return d[1];
+        let volume = resp.data.map(d=>{
+            return d[5];
         });
-        high = resp.data.map(d=>{
-            return d[2];
-        });
-        low = resp.data.map(d=>{
-            return d[3];
-        });
-        close = resp.data.map(d=>{
-            return d[4];
-        });
-        coinsDataOne[_coin] = {open: open, high: high, low: low, close: close};
+        historical[_coin] = {open: open, high: high, low: low, close: close, volume: volume};
+        timestamp = resp.data[resp.data.length -1][0]*1000;
+        live_high[_coin] = close[close.length-1];
+        live_low[_coin] = close[close.length-1];
     } catch (error) {
         console.log(error)
     }
 };
 
-// Data Call 
-loadData("DOGE-INR");
-loadData("ADA-INR");
-loadData("XVG-INR");
-loadData("MATIC-INR");
-loadData("WRX-INR");
-loadData("ETH-INR");
-loadData("BTC-INR");
-loadData("XRP-INR");
-setTimeout(function(){setInterval(function(){ loadData("DOGE-INR");}, 10000)}, 250);
-setTimeout(function(){setInterval(function(){ loadData("ADA-INR");}, 10000)}, 500);
-setTimeout(function(){setInterval(function(){ loadData("XVG-INR");}, 10000)}, 750);
-setTimeout(function(){setInterval(function(){ loadData("MATIC-INR");}, 10000)}, 1000);
-setTimeout(function(){setInterval(function(){ loadData("WRX-INR");}, 10000)}, 1250);
-setTimeout(function(){setInterval(function(){ loadData("ETH-INR");}, 10000)}, 1500);
-setTimeout(function(){setInterval(function(){ loadData("BTC-INR");}, 10000)}, 1750);
-setTimeout(function(){setInterval(function(){ loadData("XRP-INR");}, 10000)}, 2000);
+trader.forEach(c=>{
+    loadData(c);
+});
 
 // CROS
 var corsOptionsDelegate = (req, callback) => {
@@ -112,93 +93,73 @@ io.on("connection", socket=>{
     console.log(socket.client.conn.server.clientsCount);
 });
 
-var loadWss = () =>{
-    // WSS Connections
-    var wss = new WebSocket('wss://ws-ap2.pusher.com/app/47bd0a9591a05c2a66db?protocol=7&client=js&version=4.4.0&flash=falseh');
+// WSS Connections
+var wss = new WebSocket('wss://ws-ap2.pusher.com/app/47bd0a9591a05c2a66db?protocol=7&client=js&version=4.4.0&flash=falseh');
 
-    wss.on('open', () => {
-        wss.send(JSON.stringify({"event":"pusher:subscribe","data":{"channel":"market-dogeinr-global"}}));
-        wss.send(JSON.stringify({"event":"pusher:subscribe","data":{"channel":"market-adainr-global"}}));
-        wss.send(JSON.stringify({"event":"pusher:subscribe","data":{"channel":"market-xvginr-global"}}));
-        wss.send(JSON.stringify({"event":"pusher:subscribe","data":{"channel":"market-maticinr-global"}}));
-        wss.send(JSON.stringify({"event":"pusher:subscribe","data":{"channel":"market-wrxinr-global"}}));
-        wss.send(JSON.stringify({"event":"pusher:subscribe","data":{"channel":"market-ethinr-global"}}));
-        wss.send(JSON.stringify({"event":"pusher:subscribe","data":{"channel":"market-btcinr-global"}}));
-        wss.send(JSON.stringify({"event":"pusher:subscribe","data":{"channel":"market-xrpinr-global"}}));
-        wss.onmessage = e => {
-            let data = JSON.parse(e.data);
-            if(data.event == "trades"){
-                let coinName = data.channel.split("-")[1];
-                data = JSON.parse(data.data);
-                let price = data.trades[0].price;
-                if(coinPrice[coinName]!=price){
-                    let _coinName = coinName.toUpperCase().replace("INR", "-INR");
-                    let new_data = [...coinsData[coinName].close];
-                    new_data.push(price);
-                    let macd = MACD.calculate({values: new_data, fastPeriod: 12,
-                        slowPeriod: 26,
-                        signalPeriod: 9,
-                        SimpleMAOscillator: false,
-                        SimpleMASignal: false});
-                    let myHist = macd[macd.length-1].histogram;
-                    let roc = ROC.calculate({values: new_data, period: 9});
-                    roc = roc[roc.length - 1];
-                    let bullish = BULLISH(coinsData[coinName]);
-                    let bearish = BEARISH(coinsData[coinName]);
-                    let new_dataOne = [...coinsDataOne[coinName].close];
-                    new_dataOne.push(price);
-                    let macdOne = MACD.calculate({values: new_dataOne, fastPeriod: 12,
-                        slowPeriod: 26,
-                        signalPeriod: 9,
-                        SimpleMAOscillator: false,
-                        SimpleMASignal: false});
-                    let myHistOne = macdOne[macdOne.length-1].histogram;
-                    let limit = Math.abs(macd[macd.length -1].MACD*0.1)
-                    let ts = new Date().getTime();
-                    if(coinName in coinsHist){
-                        if(coinsHist[coinName]>0 && myHistOne>0 && coinsHistOne[coinName]<0){
-                            // Buy one only after Buy Five #notrade
-                            coinsHistOne[coinName] = 1;
-                        }
-                        if(coinsHist[coinName]>0 && coinsHistOne[coinName]>0 && myHistOne<0){
-                            // Sell One only after Buy Five
-                            console.log(coinName, "sell 1", myHistOne, price);
-                            io.emit('signal', {"coin": _coinName, "type": "sell", "precentage": "25"});
-                            db_signal.updateOne({id: coinName, ts: ts}, {$set: {id: coinName, ts: ts, signal: "sell", precentage: "25", price: price, "value": myHistOne}}, {upsert: true}).exec();
-                            coinsHistOne[coinName] = -1;
-                        }
-                        if(coinsHist[coinName]>0 && myHist<0){
-                            // Sell
-                            console.log(coinName, "sell 5", myHist, price);
-                            io.emit('signal', {"coin": _coinName, "type": "sell", "precentage": "100"});
-                            db_signal.updateOne({id: coinName, ts: ts}, {$set: {id: coinName, ts: ts, signal: "sell", precentage: "100", price: price, "value": myHist, "bullish": bullish, "bearish": bearish, "roc": roc}}, {upsert: true}).exec();
-                            coinsHist[coinName] = -1;
-                        }
-                        if(coinsHist[coinName]<0 && myHist>limit && bullish){
-                            // Buy
-                            console.log(coinName, "buy", myHist, price);
-                            io.emit('signal', {"coin": _coinName, "type": "buy"});
-                            db_signal.updateOne({id: coinName, ts: ts}, {$set: {id: coinName, ts: ts, signal: "buy", price: price, "value": myHist, "bullish": bullish, "bearish": bearish, "roc": roc}}, {upsert: true}).exec();
-                            coinsHist[coinName] = 1;
-                            coinsHistOne[coinName] = 1;
-                        }
-                    }else{
-                        if(myHist >0){
-                            coinsHist[coinName] = 1
-                        }else{
-                            coinsHist[coinName] = -1
-                        }
-                        if(myHistOne >0){
-                            coinsHistOne[coinName] = 0
-                        }else{
-                            coinsHistOne[coinName] = 0
-                        }
-                        coinPrice[coinName] = price;
-                    }
-                }
+wss.on('open', () => {
+    setTimeout(()=>{trader.forEach(c=>{subscribe(c);});},10000);
+    wss.onmessage = e => {
+        let data = JSON.parse(e.data);
+        if(data.event == "trades"){
+            let coinName = data.channel.split("-")[1];
+            data = JSON.parse(data.data);
+            let price = data.trades[0].price;
+            if(live[coinName]!=price){
+                live[coinName] = parseFloat(price);
+                // Call Get Signal
+                if(live_low[coinName]>price)live_low[coinName] = parseFloat(price);
+                if(live_high[coinName]<price)live_high[coinName] = parseFloat(price);
+                getSignal(coinName);
             }
-        };
-    });
+        }
+    };
+});
+
+let subscribe = coin =>{
+    let _coin = coin.toLowerCase().split("-");
+    _coin = _coin.join("");
+    wss.send(JSON.stringify({"event":"pusher:subscribe","data":{"channel":`market-${_coin}-global`}}));
 }
 
-setTimeout(()=>{loadWss();}, 10000);
+let getSignal = coin =>{
+    let coinName = coin.toUpperCase().replace("INR", "-INR");
+    let close = [...historical[coin].close];
+    let high = [...historical[coin].high];
+    let low = [...historical[coin].low];
+    high.push(live_high[coin]);
+    low.push(live_low[coin]);
+    let step = 0.02;
+    let max = 0.2;
+    let psar = new PSAR({high, low, step, max}).getResult();
+    let psar_diff = live[coin] - psar[psar.length -1];
+    if(coin in signal){
+        let ts = new Date().getTime();
+        close.push(live[coin]);
+        let macd = MACD.calculate({values: close, fastPeriod: 12, slowPeriod: 26, signalPeriod: 9, SimpleMAOscillator: false, SimpleMASignal: false});
+        let histogram = macd[macd.length-1].histogram;
+        if(signal[coin]==-1 && psar_diff>0){
+            // Buy Signal & Check MACD
+            console.log("Buy", coin, live[coin]);
+            io.emit('signal', {"coin": coinName, "type": "buy", "price": live[coin]});
+            db_test.updateOne({id: coinName, ts: ts}, {$set: {id: coinName, ts: ts, signal: "buy", price: live[coin], "histogram": histogram}}, {upsert: true}).exec();
+        }
+        if(signal[coin]==1 && psar_diff<0){
+            // Sell
+            console.log("Sell", coin, live[coin])
+            io.emit('signal', {"coin": coinName, "type": "sell", "price": live[coin]});
+            db_test.updateOne({id: coinName, ts: ts}, {$set: {id: coinName, ts: ts, signal: "sell", price: live[coin], "histogram": histogram}}, {upsert: true}).exec();
+        }
+    }else{
+        if(psar_diff>0) signal[coin] = 1;
+        else signal[coin] = -1;
+    }
+}
+
+setInterval(()=>{
+    let ts = new Date().getTime();
+    if((ts - timestamp)>330000){
+        trader.forEach(c=>{
+            loadData(c);
+        });
+    }
+}, 1000);
