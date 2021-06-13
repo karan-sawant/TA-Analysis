@@ -27,7 +27,7 @@ live_high={},
 live_low={};
 
 const coins = ['USDT-INR', 'MATIC-INR', 'BTC-INR', 'WRX-INR', 'TKO-INR', 'DOGE-INR', 'ETH-INR', 'SHIB-INR', 'ADA-INR', 'XRP-INR', 'XVG-INR', 'WIN-INR', 'BNB-INR', 'TRX-INR', 'UFT-INR', 'VET-INR', 'DOCK-INR', 'ARK-INR', 'COTI-INR', '1INCH-INR', 'ETC-INR', 'BTT-INR', 'ENJ-INR', 'DOT-INR', 'DGB-INR', 'CHR-INR', 'HBAR-INR', 'ZIL-INR', 'LTC-INR', 'DENT-INR', 'CRV-INR', 'XLM-INR', 'EOS-INR', 'REN-INR', 'LINK-INR', 'SC-INR', 'BZRX-INR', 'LUNA-INR', 'SXP-INR', 'FTM-INR', 'BCH-INR', 'HOT-INR', 'HNT-INR', 'CAKE-INR', 'BAT-INR', 'XEM-INR', 'UNI-INR', 'ATOM-INR', 'IOTX-INR', 'YFII-INR', 'YFI-INR', 'OMG-INR', 'FIL-INR', 'IOST-INR', 'MANA-INR', 'EZ-INR', 'KMD-INR', 'BUSD-INR', 'ZRX-INR', 'CTSI-INR', 'AVAX-INR', 'CVC-INR', 'PUSH-INR', 'ZEC-INR', 'DASH-INR', 'UMA-INR', 'PAXG-INR', 'FTT-INR'];
-var trader = ["MATIC-INR"];
+var trader = coins;
 
 // Load Data
 let loadData = async coin =>{
@@ -132,7 +132,6 @@ let getSignal = coin =>{
     let max = 0.2;
     let psar = new PSAR({high, low, step, max}).getResult();
     let psar_diff = live[coin] - psar[psar.length -1];
-    console.log(coin, psar_diff,psar[psar.length -1])
     if(coin in signal){
         let ts = new Date().getTime();
         close.push(live[coin]);
