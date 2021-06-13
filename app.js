@@ -128,7 +128,6 @@ let getSignal = coin =>{
     let max = 0.2;
     let psar = new PSAR({high, low, step, max}).getResult();
     let psar_diff = close[close.length -1] - psar[psar.length -1];
-    console.log(coin, psar_diff, close[close.length -1])
     if(coin in signal){
         let ts = new Date().getTime();
         let macd = MACD.calculate({values: close, fastPeriod: 12, slowPeriod: 26, signalPeriod: 9, SimpleMAOscillator: false, SimpleMASignal: false});
