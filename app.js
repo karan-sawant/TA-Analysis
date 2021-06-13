@@ -18,16 +18,36 @@ dataManager.connect("mongodb+srv://admin:VkpZ7b47MI42SHdV@metastorage.x9ydo.mong
 var db_signal = dataManager.model("signal", new mongoose.Schema({},{ strict: false }), "signal");
 
 // Global Variable
-var live = {},
-signal = {},
+var signal = {},
 historical = {},
 timestamp = 0,
-tradetime = {},
-live_high={},
-live_low={};
+tradetime = {};
 
 const coins = ['USDT-INR', 'MATIC-INR', 'BTC-INR', 'WRX-INR', 'TKO-INR', 'DOGE-INR', 'ETH-INR', 'SHIB-INR', 'ADA-INR', 'XRP-INR', 'XVG-INR', 'WIN-INR', 'BNB-INR', 'TRX-INR', 'UFT-INR', 'VET-INR', 'DOCK-INR', 'ARK-INR', 'COTI-INR', '1INCH-INR', 'ETC-INR', 'BTT-INR', 'ENJ-INR', 'DOT-INR', 'DGB-INR', 'CHR-INR', 'HBAR-INR', 'ZIL-INR', 'LTC-INR', 'DENT-INR', 'CRV-INR', 'XLM-INR', 'EOS-INR', 'REN-INR', 'LINK-INR', 'SC-INR', 'BZRX-INR', 'LUNA-INR', 'SXP-INR', 'FTM-INR', 'BCH-INR', 'HOT-INR', 'HNT-INR', 'CAKE-INR', 'BAT-INR', 'XEM-INR', 'UNI-INR', 'ATOM-INR', 'IOTX-INR', 'YFII-INR', 'YFI-INR', 'OMG-INR', 'FIL-INR', 'IOST-INR', 'MANA-INR', 'EZ-INR', 'KMD-INR', 'BUSD-INR', 'ZRX-INR', 'CTSI-INR', 'AVAX-INR', 'CVC-INR', 'PUSH-INR', 'ZEC-INR', 'DASH-INR', 'UMA-INR', 'PAXG-INR', 'FTT-INR'];
 var trader = coins;
+
+// WSS Connections
+var wss = new WebSocket('wss://ws-ap2.pusher.com/app/47bd0a9591a05c2a66db?protocol=7&client=js&version=4.4.0&flash=falseh');
+
+wss.on('open', () => {
+    trader.forEach(c=>{subscribe(c);});
+    wss.onmessage = e => {
+        let data = JSON.parse(e.data);
+        if(data.event == "trades"){
+            let coinName = data.channel.split("-")[1];
+            data = JSON.parse(data.data);
+            let price = data.trades[0].price;
+            if(coinName in historical)
+            if(historical[coinName].close[historical[coinName].close.length -1]!=price){
+                historical[coinName].close[historical[coinName].close.length -1] = parseFloat(price);
+                // Call Get Signal
+                if(historical[coinName].low[historical[coinName].low.length -1]>price)historical[coinName].low[historical[coinName].low.length -1] = parseFloat(price);
+                if(historical[coinName].high[historical[coinName].high.length -1]<price)historical[coinName].high[historical[coinName].high.length -1] = parseFloat(price);
+                // getSignal(coinName);
+            }
+        }
+    };
+});
 
 // Load Data
 let loadData = async coin =>{
@@ -55,9 +75,9 @@ let loadData = async coin =>{
             return d[5];
         });
         historical[_coin] = {open: open, high: high, low: low, close: close, volume: volume};
+        let _ts = resp.data[resp.data.length -1][0]*1000;
+        getSignal(_coin);
         timestamp = resp.data[resp.data.length -1][0]*1000;
-        live_high[_coin] = close[close.length-1];
-        live_low[_coin] = close[close.length-1];
     } catch (error) {
         console.log(error)
     }
@@ -93,28 +113,6 @@ io.on("connection", socket=>{
     console.log(socket.client.conn.server.clientsCount);
 });
 
-// WSS Connections
-var wss = new WebSocket('wss://ws-ap2.pusher.com/app/47bd0a9591a05c2a66db?protocol=7&client=js&version=4.4.0&flash=falseh');
-
-wss.on('open', () => {
-    setTimeout(()=>{trader.forEach(c=>{subscribe(c);});},10000);
-    wss.onmessage = e => {
-        let data = JSON.parse(e.data);
-        if(data.event == "trades"){
-            let coinName = data.channel.split("-")[1];
-            data = JSON.parse(data.data);
-            let price = data.trades[0].price;
-            if(live[coinName]!=price){
-                live[coinName] = parseFloat(price);
-                // Call Get Signal
-                if(live_low[coinName]>price)live_low[coinName] = parseFloat(price);
-                if(live_high[coinName]<price)live_high[coinName] = parseFloat(price);
-                getSignal(coinName);
-            }
-        }
-    };
-});
-
 let subscribe = coin =>{
     let _coin = coin.toLowerCase().split("-");
     _coin = _coin.join("");
@@ -126,30 +124,28 @@ let getSignal = coin =>{
     let close = [...historical[coin].close];
     let high = [...historical[coin].high];
     let low = [...historical[coin].low];
-    // high.push(live_high[coin]);
-    // low.push(live_low[coin]);
     let step = 0.02;
     let max = 0.2;
     let psar = new PSAR({high, low, step, max}).getResult();
-    let psar_diff = live[coin] - psar[psar.length -1];
+    let psar_diff = close[close.length -1] - psar[psar.length -1];
+    console.log(coin, psar_diff, close[close.length -1])
     if(coin in signal){
         let ts = new Date().getTime();
-        close.push(live[coin]);
         let macd = MACD.calculate({values: close, fastPeriod: 12, slowPeriod: 26, signalPeriod: 9, SimpleMAOscillator: false, SimpleMASignal: false});
         let histogram = macd[macd.length-1].histogram;
         if(signal[coin]==-1 && psar_diff>0 && (ts - tradetime[coin])>300000){
-            // Buy Signal & Check MACD
-            console.log("Buy", coin, live[coin]);
-            io.emit('signal', {"coin": coinName, "type": "buy", "price": live[coin]});
-            db_signal.updateOne({id: coinName, ts: ts}, {$set: {id: coinName, ts: ts, signal: "buy", price: live[coin], "histogram": histogram, "parabolic": psar[psar.length -1]}}, {upsert: true}).exec();
+            // Buy Signal & Check MACD  
+            console.log("Buy", coin, close[close.length -1]);
+            io.emit('signal', {"coin": coinName, "type": "buy", "price": close[close.length -1]});
+            db_signal.updateOne({id: coinName, ts: ts}, {$set: {id: coinName, ts: ts, signal: "buy", price: close[close.length -1], "histogram": histogram, "parabolic": psar[psar.length -1]}}, {upsert: true}).exec();
             signal[coin]=1;
             tradetime[coin] = ts;
         }
         if(signal[coin]==1 && psar_diff<0 && (ts - tradetime[coin])>300000){
             // Sell
-            console.log("Sell", coin, live[coin])
-            io.emit('signal', {"coin": coinName, "type": "sell", "price": live[coin]});
-            db_signal.updateOne({id: coinName, ts: ts}, {$set: {id: coinName, ts: ts, signal: "sell", price: live[coin], "histogram": histogram, "parabolic": psar[psar.length -1]}}, {upsert: true}).exec();
+            console.log("Sell", coin, close[close.length -1])
+            io.emit('signal', {"coin": coinName, "type": "sell", "price": close[close.length -1]});
+            db_signal.updateOne({id: coinName, ts: ts}, {$set: {id: coinName, ts: ts, signal: "sell", price: close[close.length -1], "histogram": histogram, "parabolic": psar[psar.length -1]}}, {upsert: true}).exec();
             signal[coin]=-1;
             tradetime[coin] = ts;
         }
